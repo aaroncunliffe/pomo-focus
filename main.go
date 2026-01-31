@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Testing
@@ -35,6 +36,8 @@ type model struct {
 	keymap       keymap
 	help         help.Model
 	quitting     bool
+	width        int
+	height       int
 }
 
 type keymap struct {
@@ -73,6 +76,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.keymap.start.SetEnabled(false)
 		m.keymap.next.SetEnabled(true)
 
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keymap.quit):
@@ -80,6 +88,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case key.Matches(msg, m.keymap.shortBreak):
 			// Short break doesn't reset session count.
+			// TODO: currently advances the session when you leave this 'forced' break
 			m.sessionType = SessionShortBreak
 			m.timer.Timeout = shortBreak
 			return m, m.timer.Start()
@@ -123,7 +132,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) helpView() string {
-	return "\n" + m.help.ShortHelpView([]key.Binding{
+	return m.help.ShortHelpView([]key.Binding{
 		m.keymap.start,
 		m.keymap.stop,
 		m.keymap.next,
@@ -146,8 +155,9 @@ func (m model) View() string {
 			s += " - Long Break Next"
 		}
 		s += "\n"
-		s += fmt.Sprintf("Timer: %s\n", timeout.Round(time.Second))
-		s += fmt.Sprintf("Session Count: %d\n", m.sessionCount)
+		s += "Timer: " + lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true).Render(fmt.Sprintf("%s", timeout.Round(time.Second)))
+		s += "\n"
+		s += fmt.Sprintf("Session Count: %d/4\n", m.sessionCount)
 
 	case SessionShortBreak:
 		s += fmt.Sprintln("Session Short Break")
@@ -164,11 +174,10 @@ func (m model) View() string {
 	if m.timer.Timedout() {
 		s += "Session Complete - Reset or Next"
 	}
-	s += "\n"
-	if !m.quitting {
-		s += m.helpView()
-	}
-	return s
+
+	mainView := lipgloss.NewStyle().Padding(2, 4).Border(lipgloss.NormalBorder(), true).Align(lipgloss.Center).Render(s)
+	helpView := lipgloss.NewStyle().Padding(2).Render(m.helpView())
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, lipgloss.JoinVertical(lipgloss.Center, mainView, helpView))
 }
 
 func main() {
