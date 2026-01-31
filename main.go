@@ -11,20 +11,36 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// Testing
+// const timeout = 5 * time.Second
+// const shortBreak = 3 * time.Second
+// const longBreak = 10 * time.Second
+
 const timeout = 25 * time.Minute
 const shortBreak = 5 * time.Minute
 const longBreak = 15 * time.Minute
 
+type SessionType int
+
+const (
+	SessionFocus SessionType = iota
+	SessionShortBreak
+	SessionLongBreak
+)
+
 type model struct {
-	timer    timer.Model
-	keymap   keymap
-	help     help.Model
-	quitting bool
+	timer        timer.Model
+	sessionType  SessionType
+	sessionCount int
+	keymap       keymap
+	help         help.Model
+	quitting     bool
 }
 
 type keymap struct {
 	start      key.Binding
 	stop       key.Binding
+	next       key.Binding
 	reset      key.Binding
 	shortBreak key.Binding
 	longBreak  key.Binding
@@ -47,11 +63,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.timer, cmd = m.timer.Update(msg)
 		m.keymap.stop.SetEnabled(m.timer.Running())
 		m.keymap.start.SetEnabled(!m.timer.Running())
+		m.keymap.next.SetEnabled(false)
 		return m, cmd
 
 	case timer.TimeoutMsg:
 		// Native terminal bell.
 		fmt.Print("\a")
+		m.keymap.stop.SetEnabled(false)
+		m.keymap.start.SetEnabled(false)
+		m.keymap.next.SetEnabled(true)
 
 	case tea.KeyMsg:
 		switch {
@@ -59,15 +79,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case key.Matches(msg, m.keymap.shortBreak):
+			// Short break doesn't reset session count.
+			m.sessionType = SessionShortBreak
 			m.timer.Timeout = shortBreak
 			return m, m.timer.Start()
 		case key.Matches(msg, m.keymap.longBreak):
+			m.sessionCount = 0
+			m.sessionType = SessionLongBreak
 			m.timer.Timeout = longBreak
 			return m, m.timer.Start()
 		case key.Matches(msg, m.keymap.reset):
+			m.sessionCount = 0
 			m.timer.Timeout = timeout
+			m.sessionType = SessionFocus
 		case key.Matches(msg, m.keymap.start, m.keymap.stop):
 			return m, m.timer.Toggle()
+		case key.Matches(msg, m.keymap.next):
+
+			switch m.sessionType {
+
+			// Break Ending
+			case SessionShortBreak, SessionLongBreak:
+				m.sessionCount++
+				m.sessionType = SessionFocus
+				m.timer.Timeout = timeout
+
+			// Focus ending
+			case SessionFocus:
+				if m.sessionCount == 4 {
+					m.sessionCount = 0
+					m.sessionType = SessionLongBreak
+					m.timer.Timeout = longBreak
+				} else {
+					m.sessionType = SessionShortBreak
+					m.timer.Timeout = shortBreak
+				}
+			}
+			return m, m.timer.Start()
 		}
 	}
 
@@ -78,6 +126,7 @@ func (m model) helpView() string {
 	return "\n" + m.help.ShortHelpView([]key.Binding{
 		m.keymap.start,
 		m.keymap.stop,
+		m.keymap.next,
 		m.keymap.reset,
 		m.keymap.shortBreak,
 		m.keymap.longBreak,
@@ -85,13 +134,35 @@ func (m model) helpView() string {
 	})
 }
 
+// Build the display lines for the terminal display
 func (m model) View() string {
-
 	timeout := m.timer.Timeout
-	s := fmt.Sprintf("timer: %s", timeout.Round(time.Second))
+	s := ""
+
+	switch m.sessionType {
+	case SessionFocus:
+		s += "Session Focus"
+		if m.sessionCount == 4 {
+			s += " - Long Break Next"
+		}
+		s += "\n"
+		s += fmt.Sprintf("Timer: %s\n", timeout.Round(time.Second))
+		s += fmt.Sprintf("Session Count: %d\n", m.sessionCount)
+
+	case SessionShortBreak:
+		s += fmt.Sprintln("Session Short Break")
+		s += fmt.Sprintf("Timer: %s\n", timeout.Round(time.Second))
+		s += fmt.Sprintln("")
+
+	case SessionLongBreak:
+		s += fmt.Sprintln("Session Long Break")
+		s += fmt.Sprintf("Timer: %s\n", timeout.Round(time.Second))
+		s += fmt.Sprintln("")
+
+	}
 
 	if m.timer.Timedout() {
-		s = "Session Complete - Reset or Break"
+		s += "Session Complete - Reset or Next"
 	}
 	s += "\n"
 	if !m.quitting {
@@ -102,15 +173,23 @@ func (m model) View() string {
 
 func main() {
 	m := model{
-		timer: timer.NewWithInterval(timeout, time.Millisecond),
+		timer:        timer.NewWithInterval(timeout, time.Millisecond),
+		sessionType:  SessionFocus,
+		sessionCount: 1,
 		keymap: keymap{
 			start: key.NewBinding(
 				key.WithKeys("s"),
 				key.WithHelp("s", "start"),
+				key.WithDisabled(),
 			),
 			stop: key.NewBinding(
 				key.WithKeys("s"),
 				key.WithHelp("s", "stop"),
+			),
+			next: key.NewBinding(
+				key.WithKeys("s"),
+				key.WithHelp("s", "next"),
+				key.WithDisabled(),
 			),
 			reset: key.NewBinding(
 				key.WithKeys("r"),
@@ -131,8 +210,6 @@ func main() {
 		},
 		help: help.New(),
 	}
-
-	m.keymap.start.SetEnabled(false)
 
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Println("error starting:", err)
