@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  run:
+    cmds: 
+      - go run main.go
+  build:
+    cmds:
+      - go build -o pomofocus .
+  test:
+    cmds:
+      - go test ./...
+  vet:
+    cmds:
+      - go vet ./...
+  prep:
+    cmds:
+      - task: vet
+      - task: test
