@@ -104,7 +104,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keymap.start, m.keymap.stop):
 			return m, m.timer.Toggle()
 		case key.Matches(msg, m.keymap.next):
-
 			switch m.sessionType {
 
 			// Break Ending
@@ -145,8 +144,30 @@ func (m model) helpView() string {
 
 // Build the display lines for the terminal display
 func (m model) View() string {
-	timeout := m.timer.Timeout
+	timeout := m.timer.Timeout.Round(time.Second)
 	s := ""
+
+	// Colours
+	timerColour := lipgloss.Color("#04B575")
+	timerFinishedColour := lipgloss.Color("#FF0000")
+	breakColour := lipgloss.Color("#9900ff")
+
+	// ---------------------
+	// Lipgloss Style blocks
+	timerStyle := lipgloss.NewStyle().Foreground(timerColour).Bold(true)
+	mainViewStyle := lipgloss.NewStyle().Padding(2, 4).Margin(4, 4, 0, 4).Border(lipgloss.NormalBorder(), true).Align(lipgloss.Center)
+	helpViewStyle := lipgloss.NewStyle().Padding(2).Margin(0, 4, 4, 4)
+
+	var backgroundStyles []lipgloss.WhitespaceOption
+	backgroundStyles = append(backgroundStyles, lipgloss.WithWhitespaceChars("|-|"))
+
+	// Timer not running styles
+	if !m.timer.Running() {
+		backgroundStyles = append(backgroundStyles,
+			lipgloss.WithWhitespaceForeground(timerFinishedColour),
+		)
+	}
+	// ---------------------
 
 	switch m.sessionType {
 	case SessionFocus:
@@ -155,29 +176,35 @@ func (m model) View() string {
 			s += " - Long Break Next"
 		}
 		s += "\n"
-		s += "Timer: " + lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true).Render(fmt.Sprintf("%s", timeout.Round(time.Second)))
+		s += "Timer: " + timerStyle.Render(fmt.Sprintf("%s", timeout))
 		s += "\n"
 		s += fmt.Sprintf("Session Count: %d/4\n", m.sessionCount)
 
 	case SessionShortBreak:
-		s += fmt.Sprintln("Session Short Break")
-		s += fmt.Sprintf("Timer: %s\n", timeout.Round(time.Second))
-		s += fmt.Sprintln("")
+		s += "Session Short Break\n"
+		s += "Timer: " + timerStyle.Render(fmt.Sprintf("%s", timeout))
+		s += "\n"
+		backgroundStyles = append(backgroundStyles, lipgloss.WithWhitespaceForeground(breakColour))
 
 	case SessionLongBreak:
-		s += fmt.Sprintln("Session Long Break")
-		s += fmt.Sprintf("Timer: %s\n", timeout.Round(time.Second))
-		s += fmt.Sprintln("")
-
+		s += "Session Long Break\n"
+		s += "Timer: " + timerStyle.Render(fmt.Sprintf("%s", timeout))
+		s += "\n"
+		backgroundStyles = append(backgroundStyles, lipgloss.WithWhitespaceForeground(breakColour))
 	}
 
 	if m.timer.Timedout() {
 		s += "Session Complete - Reset or Next"
 	}
 
-	mainView := lipgloss.NewStyle().Padding(2, 4).Border(lipgloss.NormalBorder(), true).Align(lipgloss.Center).Render(s)
-	helpView := lipgloss.NewStyle().Padding(2).Render(m.helpView())
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, lipgloss.JoinVertical(lipgloss.Center, mainView, helpView))
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+		lipgloss.JoinVertical(lipgloss.Center,
+			// Views to apply
+			mainViewStyle.Render(s),
+			helpViewStyle.Render(m.helpView()),
+		),
+		backgroundStyles...,
+	)
 }
 
 func main() {
