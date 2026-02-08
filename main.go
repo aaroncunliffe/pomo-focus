@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -156,7 +157,7 @@ func (m model) View() string {
 	// Lipgloss Style blocks
 	timerStyle := lipgloss.NewStyle().Foreground(timerColour).Bold(true)
 	mainViewStyle := lipgloss.NewStyle().Padding(2, 4).Margin(4, 4, 0, 4).Border(lipgloss.NormalBorder(), true).Align(lipgloss.Center)
-	helpViewStyle := lipgloss.NewStyle().Padding(2).Margin(0, 4, 4, 4)
+	helpViewStyle := lipgloss.NewStyle().Padding(2).Margin(0, 4, 3, 4)
 
 	var backgroundStyles []lipgloss.WhitespaceOption
 	backgroundStyles = append(backgroundStyles, lipgloss.WithWhitespaceChars("|-|"))
@@ -208,8 +209,20 @@ func (m model) View() string {
 }
 
 func main() {
+	timeoutValue := timeout
+
+	// Manual timeout arg - First session only
+	args := os.Args
+	if len(args) > 1 && args[1] != "" {
+		t, err := time.ParseDuration(args[1])
+		if err != nil {
+			log.Fatalf("timeout arg invalid: [%s]", err.Error())
+		}
+		timeoutValue = t
+	}
+
 	m := model{
-		timer:        timer.NewWithInterval(timeout, time.Millisecond),
+		timer:        timer.NewWithInterval(timeoutValue, time.Millisecond),
 		sessionType:  SessionFocus,
 		sessionCount: 1,
 		keymap: keymap{
