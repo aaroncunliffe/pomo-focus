@@ -2,6 +2,8 @@
 
 A simple TUI Pomodoro timer to help with deep focus. Built primarily for my own use.
 
+<img src="./images/image.png" width="600">
+
 ## Why?
 - The Pomodoro method is a tried and tested method for improving focus.
 - This project is a good excuse to use the very aesthetic CharmBracelet Libraries: [bubbletea](https://github.com/charmbracelet/bubbletea) and [lipgoss](https://github.com/charmbracelet/lipgloss).
