@@ -253,8 +253,8 @@ func main() {
 				key.WithHelp("l", "long break"),
 			),
 			quit: key.NewBinding(
-				key.WithKeys("q", "ctrl+c"),
-				key.WithHelp("q", "quit"),
+				key.WithKeys("q", "esc", "ctrl+c"),
+				key.WithHelp("esc / q", "quit"),
 			),
 		},
 		help: help.New(),
